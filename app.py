@@ -1,53 +1,54 @@
-from nltk.stem.porter import PorterStemmer
-from nltk.corpus import stopwords
-import nltk
 import streamlit as st
 import pickle
+import re
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+from nltk.stem.porter import PorterStemmer
 
-# ---- Ensure required NLTK resources exist ----
-try:
-    stop_words = set(stopwords.words('english'))
-except LookupError:
-    nltk.download('stopwords')
-    stop_words = set(stopwords.words('english'))
+# -------------------------------
+# Load model and vectorizer
+# -------------------------------
+tfidf = pickle.load(open("vectorizer.pkl", "rb"))
+model = pickle.load(open("model.pkl", "rb"))
 
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-
-# ---------------------------------------------
-
-# Load the vectorizer and model
-tfidf = pickle.load(open('vectorizer.pkl', 'rb'))
-model = pickle.load(open('model.pkl', 'rb'))
-
-st.title('Email/SMS Spam Classifier')
-
+# -------------------------------
+# Text preprocessing setup
+# -------------------------------
 ps = PorterStemmer()
+stop_words = ENGLISH_STOP_WORDS
 
 
 def transform_text(text):
     text = text.lower()
-    tokens = nltk.word_tokenize(text)
+
+    # Remove non-alphanumeric characters
+    text = re.sub(r"[^a-zA-Z0-9]", " ", text)
+
+    tokens = text.split()
 
     filtered_words = []
-
     for word in tokens:
-        if word.isalnum() and word not in stop_words:
+        if word not in stop_words:
             filtered_words.append(ps.stem(word))
 
     return " ".join(filtered_words)
 
 
-input_sms = st.text_area('Enter the message')
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+st.title("📩 Email / SMS Spam Classifier")
 
-if st.button('Predict'):
-    transformed_sms = transform_text(input_sms)
-    vector_input = tfidf.transform([transformed_sms])
-    result = model.predict(vector_input)[0]
+input_sms = st.text_area("Enter the message")
 
-    if result == 1:
-        st.header('Spam')
+if st.button("Predict"):
+    if input_sms.strip() == "":
+        st.warning("Please enter a message.")
     else:
-        st.header('Not Spam')
+        transformed_sms = transform_text(input_sms)
+        vector_input = tfidf.transform([transformed_sms])
+        result = model.predict(vector_input)[0]
+
+        if result == 1:
+            st.error("🚨 Spam")
+        else:
+            st.success("✅ Not Spam")
